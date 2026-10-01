@@ -1,0 +1,102 @@
+@page "{id:int}"
+@model AIVES.WebRazor.Pages.Exams.DetailsModel
+@{
+    var e = Model.Exam;
+    ViewData["Title"] = e.Title;
+    var isOpen = e.Status == ExamStatuses.Open;
+    var canReallocate = e.Participants.All(p => p.Status == ParticipantStatuses.Scheduled);
+}
+<a asp-page="Index" class="small">Quay lại danh sách phiên thi</a>
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mt-2 mb-4">
+    <div>
+        <h1 class="h3 mb-1">@e.Title</h1>
+        <div class="text-muted">
+            @e.SubjectCode: @e.SubjectName
+            @if (isOpen)
+            {
+                <span class="badge text-bg-success ms-2">Đang mở</span>
+            }
+            else
+            {
+                <span class="badge text-bg-secondary ms-2">Đã đóng</span>
+            }
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        @if (canReallocate)
+        {
+            <form asp-page-handler="Reallocate" asp-route-id="@e.Id" method="post">
+                <button type="submit" class="btn btn-outline-primary">Chọn lại bộ câu hỏi</button>
+            </form>
+        }
+        <form asp-page-handler="SetOpen" asp-route-id="@e.Id" method="post">
+            <input type="hidden" name="open" value="@(isOpen ? "false" : "true")" />
+            <button type="submit" class="btn @(isOpen ? "btn-outline-danger" : "btn-outline-success")">@(isOpen ? "Đóng phiên thi" : "Mở lại phiên thi")</button>
+        </form>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm card-body py-2"><div class="small text-muted">Bắt đầu</div><div class="fw-semibold">@e.StartTime.ToString("dd/MM/yyyy HH:mm")</div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm card-body py-2"><div class="small text-muted">Mỗi thí sinh</div><div class="fw-semibold">@e.SlotMinutes phút</div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm card-body py-2"><div class="small text-muted">Câu chính / đào sâu tối đa</div><div class="fw-semibold">@e.MainQuestionCount / @e.MaxFollowUps</div></div></div>
+    <div class="col-6 col-md-3"><div class="card border-0 shadow-sm card-body py-2"><div class="small text-muted">Trả lời / hỏi xoáy mỗi câu</div><div class="fw-semibold">@e.AnswerSeconds giây / @e.MaxFollowUpsPerQuestion lượt</div></div></div>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="card-header bg-white fw-semibold">Lịch thi (@e.Participants.Count sinh viên)</div>
+    <div class="table-responsive">
+        <table class="table mb-0 align-top">
+            <thead class="table-light">
+                <tr>
+                    <th>Khung giờ</th>
+                    <th>Sinh viên</th>
+                    <th>Bộ câu hỏi được chọn</th>
+                    <th>Trạng thái</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var p in e.Participants)
+                {
+                    <tr>
+                        <td class="text-nowrap">@p.SlotStart.ToString("HH:mm") - @p.SlotEnd.ToString("HH:mm")</td>
+                        <td>@p.StudentCode<br /><span class="small text-muted">@p.FullName</span></td>
+                        <td>
+                            <ol class="small mb-0 ps-3">
+                                @foreach (var q in p.Questions)
+                                {
+                                    <li>@q</li>
+                                }
+                            </ol>
+                        </td>
+                        <td>
+                            @switch (p.Status)
+                            {
+                                case ParticipantStatuses.Completed:
+                                    <span class="badge text-bg-success">Đã thi</span>
+                                    break;
+                                case ParticipantStatuses.InProgress:
+                                    <span class="badge text-bg-warning">Đang thi</span>
+                                    break;
+                                default:
+                                    <span class="badge text-bg-secondary">Chưa thi</span>
+                                    break;
+                            }
+                        </td>
+                        <td class="text-end text-nowrap">
+                            @if (isOpen && p.Status != ParticipantStatuses.Completed)
+                            {
+                                <a asp-page="/Interview/Room" asp-route-participantId="@p.Id" class="btn btn-sm btn-primary">@(p.Status == ParticipantStatuses.InProgress ? "Tiếp tục thi" : "Bắt đầu thi")</a>
+                            }
+                            @if (p.Status != ParticipantStatuses.Scheduled)
+                            {
+                                <a asp-page="Transcript" asp-route-participantId="@p.Id" class="btn btn-sm btn-outline-primary">Biên bản</a>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

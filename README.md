@@ -9,8 +9,6 @@
 
 ASP.NET Core MVC (.NET 8) + EF Core **Database First** + SQL Server, kiến trúc 3 lớp tách thành 3 project.
 
-![Sơ đồ kiến trúc AIVES](docs/AIVES_Architecture.png)
-
 ## 1. Kiến trúc
 
 ```
@@ -114,3 +112,26 @@ Mặc định .NET cho phép WebMVC "nhìn thấy" DataAccess qua tham chiếu b
 ```
 
 Nếu sau khi thêm mà lệnh scaffold báo lỗi, bỏ dòng này đi. Bản hiện tại đã tuân thủ quy tắc bằng cách viết code, không cần dòng này để chạy.
+
+---
+
+## 6. Phần mở rộng (Razor Pages): Chức năng 2 + 3
+
+Theo yêu cầu Assignment 2 / Group Project, giao diện mới viết bằng **ASP.NET Core Razor Pages** trong project `AIVES.WebRazor`. Nó dùng lại nguyên hai tầng `AIVES.Business` và `AIVES.DataAccess`, và có cả Chức năng 7 (đăng nhập, tài khoản, phân công, ngôn ngữ STT/TTS) được chuyển sang Razor Pages. `AIVES.WebMVC` giữ nguyên làm bản Assignment 1.
+
+**Chức năng 2, quản lý kỳ thi và lịch thi** (`Pages/Exams`): giảng viên tạo phiên thi (môn, danh sách sinh viên `MSSV; Họ tên`, khung giờ mỗi thí sinh, số câu chính, số câu đào sâu tối đa mỗi thí sinh). `QuestionAllocator` chọn bộ câu hỏi cho từng sinh viên: câu ít được giao nhất đi trước, câu của thí sinh ngay trước chỉ dùng lại khi ngân hàng không đủ, nên hai người thi liền nhau không trùng câu. Ngân hàng câu hỏi theo môn quản lý ở `Pages/Exams/Questions`.
+
+**Chức năng 3, lõi phỏng vấn AI** (`Pages/Interview/Room`): trình duyệt đọc câu hỏi bằng giọng nói (Web Speech `speechSynthesis`), sinh viên trả lời bằng giọng nói (`SpeechRecognition`, hiện chữ ngay khi đang nói), ngôn ngữ lấy từ cấu hình STT/TTS của môn (Chức năng 7). Sau mỗi câu trả lời, `InterviewService` hỏi `IFollowUpGenerator` (DeepSeek) xem có cần hỏi xoáy không. Giới hạn do server kiểm: thời gian trả lời mỗi câu, số lượt hỏi xoáy mỗi câu, tổng số câu đào sâu mỗi thí sinh. Biên bản (câu hỏi, câu trả lời, lý do hỏi xoáy) xem ở `Pages/Exams/Transcript`. Cần Chrome hoặc Edge để dùng giọng nói; trình duyệt khác vẫn thi được bằng cách gõ.
+
+### Cách chạy
+
+1. SSMS: chạy `Database/AIVESDb.sql` (nếu chưa có), rồi `Database/AIVESDb_ChucNang2_3.sql` (thêm 5 bảng + câu hỏi mẫu, chạy lại không mất dữ liệu).
+2. Khóa AI (không ghi vào file, lưu user-secrets):
+   ```
+   dotnet user-secrets set "Ai:ApiKey" "<khóa DeepSeek>" --project AIVES.WebRazor
+   ```
+   Không có khóa hoặc gọi lỗi thì hệ thống tự dùng luật dự phòng (câu trả lời quá ngắn hoặc thiếu ý chính thì hỏi xoáy), buổi thi không bị kẹt. Model mặc định `deepseek-chat` (rẻ nhất), đổi ở `Ai:Model`.
+3. Đặt `AIVES.WebRazor` làm Startup Project, chạy (https://localhost:7081).
+4. Kiểm tra nhanh logic lõi, không cần DB hay internet: `dotnet run --project AIVES.Checks`.
+
+Demo: đăng nhập `an.nv@fu.edu.vn` → Phiên thi vấn đáp → Tạo phiên thi (PRN222) → Chi tiết xem bộ câu hỏi từng sinh viên → Bắt đầu thi.

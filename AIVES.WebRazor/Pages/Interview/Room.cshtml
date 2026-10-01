@@ -1,0 +1,209 @@
+@page "{participantId:int}"
+@model AIVES.WebRazor.Pages.Interview.RoomModel
+@{
+    ViewData["Title"] = "Phỏng vấn " + Model.Info.StudentCode;
+}
+@Html.AntiForgeryToken()
+
+<a asp-page="/Exams/Details" asp-route-id="@Model.Info.SessionId" class="small">Quay lại phiên thi</a>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-2 mb-3">
+    <div>
+        <h1 class="h3 mb-0">Giám khảo AI</h1>
+        <div class="text-muted">@Model.Info.StudentCode: @Model.Info.StudentName &middot; @Model.Info.SubjectCode</div>
+    </div>
+    <div id="progress" class="text-muted"></div>
+</div>
+
+<div id="room" class="card border-0 shadow-sm">
+    <div class="card-body p-4">
+        <div id="intro">
+            <p>Khi bấm bắt đầu, giám khảo AI sẽ đọc câu hỏi bằng giọng nói. Sinh viên trả lời bằng giọng nói, văn bản hiện ra gần như ngay lập tức và có thể sửa tay trước khi nộp.</p>
+            <p class="small text-muted mb-4">Cần Chrome hoặc Edge và cho phép micro. Trình duyệt không hỗ trợ giọng nói vẫn thi được bằng cách gõ câu trả lời.</p>
+            <button id="startBtn" type="button" class="btn btn-primary btn-lg">@(Model.Info.Status == ParticipantStatuses.InProgress ? "Tiếp tục phỏng vấn" : "Bắt đầu phỏng vấn")</button>
+        </div>
+
+        <div id="interview" class="d-none">
+            <div class="mb-2">
+                <span id="kindBadge" class="badge"></span>
+                <span id="micBadge" class="badge text-bg-light border ms-1 d-none"><span class="mic-dot"></span> Đang nghe</span>
+            </div>
+            <p id="question" class="h4 mb-4"></p>
+
+            <div class="d-flex justify-content-between align-items-center mb-1">
+                <label for="answer" class="form-label mb-0">Câu trả lời của sinh viên</label>
+                <span id="timer" class="fw-semibold fs-5"></span>
+            </div>
+            <div class="progress mb-3" style="height: 6px;"><div id="timerBar" class="progress-bar" style="width: 100%"></div></div>
+            <textarea id="answer" class="form-control mb-3" rows="5" placeholder="Văn bản từ giọng nói sẽ hiện ở đây..."></textarea>
+            <button id="submitBtn" type="button" class="btn btn-primary">Nộp câu trả lời</button>
+        </div>
+
+        <div id="done" class="d-none text-center py-4">
+            <h2 class="h4">Đã hoàn thành phần thi vấn đáp</h2>
+            <p class="text-muted">Toàn bộ câu hỏi và câu trả lời đã được lưu vào biên bản.</p>
+            <a asp-page="/Exams/Transcript" asp-route-participantId="@Model.Info.ParticipantId" class="btn btn-primary">Xem biên bản</a>
+        </div>
+
+        <div id="error" class="alert alert-danger mt-3 d-none" role="alert"></div>
+        <div id="note" class="small text-muted mt-3"></div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (() => {
+            const $ = id => document.getElementById(id);
+            const token = document.querySelector('input[name="__RequestVerificationToken"]').value;
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            let state = null, recog = null, listening = false, timer = null, submitting = false, finalText = '';
+
+            async function post(handler, data) {
+                const res = await fetch(`${location.pathname}?handler=${handler}`, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': token },
+                    body: new URLSearchParams(data)
+                });
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) throw new Error(json.error || 'Có lỗi xảy ra, thử lại.');
+                return json;
+            }
+
+            const showError = msg => { $('error').textContent = msg; $('error').classList.toggle('d-none', !msg); };
+
+            // ---- TTS: AI đọc câu hỏi
+            function speak(text, lang) {
+                return new Promise(resolve => {
+                    if (!('speechSynthesis' in window)) return resolve();
+                    speechSynthesis.cancel();
+                    const u = new SpeechSynthesisUtterance(text);
+                    u.lang = lang;
+                    const voice = speechSynthesis.getVoices().find(v => v.lang.replace('_', '-').startsWith(lang));
+                    if (voice) u.voice = voice;
+                    const done = () => { clearTimeout(guard); resolve(); };
+                    const guard = setTimeout(done, text.length * 120 + 4000); // phòng khi trình duyệt không bắn onend
+                    u.onend = done;
+                    u.onerror = done;
+                    speechSynthesis.speak(u);
+                });
+            }
+
+            // ---- STT: nhận dạng giọng nói, cập nhật liên tục khi đang nói
+            function startListening() {
+                if (!SR) {
+                    $('note').textContent = 'Trình duyệt này không hỗ trợ nhận dạng giọng nói. Hãy gõ câu trả lời vào ô bên dưới.';
+                    return;
+                }
+                recog = new SR();
+                recog.lang = state.sttLocale;
+                recog.continuous = true;
+                recog.interimResults = true;
+                recog.onresult = e => {
+                    let interim = '';
+                    for (let i = e.resultIndex; i < e.results.length; i++) {
+                        const r = e.results[i];
+                        if (r.isFinal) finalText += r[0].transcript + ' ';
+                        else interim += r[0].transcript;
+                    }
+                    $('answer').value = (finalText + interim).trim();
+                };
+                recog.onend = () => { if (listening) { try { recog.start(); } catch { } } }; // Chrome tự dừng khi im lặng lâu
+                recog.onerror = e => {
+                    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+                        listening = false;
+                        $('micBadge').classList.add('d-none');
+                        $('note').textContent = 'Chưa được cho phép dùng micro. Hãy cấp quyền micro hoặc gõ câu trả lời.';
+                    }
+                };
+                listening = true;
+                $('micBadge').classList.remove('d-none');
+                try { recog.start(); } catch { }
+            }
+
+            function stopListening() {
+                listening = false;
+                $('micBadge').classList.add('d-none');
+                if (recog) { try { recog.stop(); } catch { } }
+            }
+
+            // ---- Đếm ngược thời gian trả lời
+            function startTimer(seconds) {
+                const end = Date.now() + seconds * 1000;
+                clearInterval(timer);
+                const tick = () => {
+                    const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+                    $('timer').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+                    $('timerBar').style.width = `${(left / state.answerSeconds) * 100}%`;
+                    $('timerBar').className = 'progress-bar' + (left <= 10 ? ' bg-danger' : '');
+                    if (left <= 0) submit(true);
+                };
+                tick();
+                timer = setInterval(tick, 250);
+            }
+
+            function render() {
+                $('progress').textContent = `Câu chính ${state.mainIndex}/${state.mainTotal}`;
+                $('intro').classList.add('d-none');
+                $('interview').classList.toggle('d-none', state.finished);
+                $('done').classList.toggle('d-none', !state.finished);
+                if (state.finished) return;
+
+                const followUp = state.kind === 'FollowUp';
+                $('kindBadge').className = 'badge ' + (followUp ? 'text-bg-warning' : 'text-bg-primary');
+                $('kindBadge').textContent = followUp
+                    ? `Hỏi xoáy ${state.followUpIndex}/${state.followUpMax}` : 'Câu hỏi chính';
+                $('question').textContent = state.content;
+                $('answer').value = '';
+                $('timer').textContent = '';
+                $('timerBar').style.width = '100%';
+            }
+
+            async function run(s) {
+                state = s;
+                submitting = false;
+                finalText = '';
+                render();
+                if (state.finished) return;
+
+                await speak(state.content, state.ttsLocale);
+                startListening();
+                startTimer(state.secondsLeft);
+                $('answer').focus();
+            }
+
+            async function submit(timedOut) {
+                if (submitting) return;
+                submitting = true;
+                clearInterval(timer);
+                stopListening();
+                speechSynthesis.cancel();
+                showError('');
+                $('submitBtn').disabled = true;
+
+                try {
+                    const next = await post('Answer', { turnId: state.turnId, answer: $('answer').value, timedOut });
+                    $('submitBtn').disabled = false;
+                    await run(next);
+                } catch (e) {
+                    showError(e.message);
+                    $('submitBtn').disabled = false;
+                    submitting = false; // cho nộp lại
+                }
+            }
+
+            $('startBtn').addEventListener('click', async () => {
+                $('startBtn').disabled = true;
+                showError('');
+                try {
+                    await run(await post('Start', {}));
+                } catch (e) {
+                    showError(e.message);
+                    $('startBtn').disabled = false;
+                }
+            });
+            $('submitBtn').addEventListener('click', () => submit(false));
+            $('answer').addEventListener('input', () => { finalText = $('answer').value + ' '; }); // sửa tay thì giữ làm nền cho STT
+            window.addEventListener('beforeunload', () => speechSynthesis.cancel());
+        })();
+    </script>
+}

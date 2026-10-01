@@ -10,26 +10,27 @@
 <body>
     <nav class="navbar navbar-expand-md navbar-dark mb-4">
         <div class="container flex-wrap gap-2">
-            <a class="navbar-brand fw-semibold" asp-controller="Home" asp-action="Index">AIVES Quản trị</a>
+            <a class="navbar-brand fw-semibold" asp-page="/Index">AIVES</a>
             @if (User.Identity?.IsAuthenticated == true)
             {
                 <ul class="navbar-nav me-auto flex-row gap-3">
                     @if (User.IsInRole(Roles.Admin))
                     {
-                        <li class="nav-item"><a class="nav-link" asp-controller="Subjects" asp-action="Index">Môn học và phân công</a></li>
-                        <li class="nav-item"><a class="nav-link" asp-controller="Accounts" asp-action="Index">Tài khoản</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-page="/Subjects/Index">Môn học và phân công</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-page="/Accounts/Index">Tài khoản</a></li>
                     }
                     else
                     {
-                        <li class="nav-item"><a class="nav-link" asp-controller="MySubjects" asp-action="Index">Môn của tôi</a></li>
+                        <li class="nav-item"><a class="nav-link" asp-page="/MySubjects/Index">Môn của tôi</a></li>
                     }
+                    <li class="nav-item"><a class="nav-link" asp-page="/Exams/Index">Phiên thi vấn đáp</a></li>
                 </ul>
                 <div class="d-flex align-items-center gap-3 text-light">
                     <span class="small">
                         @User.Identity.Name
                         <span class="badge text-bg-light ms-1">@(User.IsInRole(Roles.Admin) ? "Quản trị viên" : "Giảng viên")</span>
                     </span>
-                    <form asp-controller="Auth" asp-action="Logout" method="post" class="m-0">
+                    <form asp-page="/Auth/Logout" method="post" class="m-0">
                         <button type="submit" class="btn btn-sm btn-outline-light">Đăng xuất</button>
                     </form>
                 </div>

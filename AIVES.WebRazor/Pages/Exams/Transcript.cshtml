@@ -1,0 +1,43 @@
+@page
+@model AIVES.WebRazor.Pages.Exams.TranscriptModel
+@{
+    var t = Model.Transcript;
+    ViewData["Title"] = "Biên bản " + t.StudentCode;
+}
+<a asp-page="Details" asp-route-id="@t.SessionId" class="small">Quay lại phiên thi</a>
+<h1 class="h3 mt-2 mb-1">Biên bản phỏng vấn</h1>
+<p class="text-muted mb-4">@t.StudentCode: @t.StudentName &middot; @t.SubjectCode &middot; @t.SessionTitle</p>
+
+@if (t.Turns.Count == 0)
+{
+    <div class="card border-0 shadow-sm card-body text-muted">Thí sinh chưa bắt đầu phỏng vấn.</div>
+}
+@foreach (var turn in t.Turns)
+{
+    var isFollowUp = turn.Kind == TurnKinds.FollowUp;
+    <div class="card border-0 shadow-sm mb-3 @(isFollowUp ? "ms-4" : "")">
+        <div class="card-body">
+            <div class="mb-2">
+                <span class="badge @(isFollowUp ? "text-bg-warning" : "text-bg-primary")">@(isFollowUp ? "Hỏi xoáy" : "Câu chính")</span>
+                @if (turn.TimedOut)
+                {
+                    <span class="badge text-bg-danger ms-1">Hết giờ</span>
+                }
+                <span class="small text-muted ms-2">@turn.AskedAt.ToLocalTime().ToString("HH:mm:ss")</span>
+            </div>
+            <p class="fw-semibold mb-1">Giám khảo AI: @turn.Content</p>
+            @if (!string.IsNullOrEmpty(turn.Reason))
+            {
+                <p class="small text-muted fst-italic mb-2">Lý do hỏi thêm: @turn.Reason</p>
+            }
+            @if (turn.Answer is null)
+            {
+                <p class="mb-0 text-muted">(chưa trả lời)</p>
+            }
+            else
+            {
+                <p class="mb-0">Sinh viên: @(turn.Answer.Length == 0 ? "(không trả lời)" : turn.Answer)</p>
+            }
+        </div>
+    </div>
+}

@@ -1,0 +1,54 @@
+@page
+@model AIVES.WebRazor.Pages.Exams.IndexModel
+@{
+    ViewData["Title"] = "Phiên thi vấn đáp";
+}
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <h1 class="h3 m-0">Phiên thi vấn đáp</h1>
+    <a asp-page="Create" class="btn btn-primary">Tạo phiên thi</a>
+</div>
+
+<div class="card border-0 shadow-sm">
+    <div class="table-responsive">
+        <table class="table mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Phiên thi</th>
+                    <th>Môn</th>
+                    <th>Bắt đầu</th>
+                    <th class="text-center">Sinh viên</th>
+                    <th>Trạng thái</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Model.Exams.Count == 0)
+                {
+                    <tr><td colspan="6" class="text-center text-muted py-4">Chưa có phiên thi nào. Bấm "Tạo phiên thi" để bắt đầu.</td></tr>
+                }
+                @foreach (var e in Model.Exams)
+                {
+                    <tr>
+                        <td class="fw-semibold">@e.Title</td>
+                        <td>@e.SubjectCode <span class="text-muted small">@e.SubjectName</span></td>
+                        <td>@e.StartTime.ToString("dd/MM/yyyy HH:mm")</td>
+                        <td class="text-center">@e.ParticipantCount</td>
+                        <td>
+                            @if (e.Status == ExamStatuses.Open)
+                            {
+                                <span class="badge text-bg-success">Đang mở</span>
+                            }
+                            else
+                            {
+                                <span class="badge text-bg-secondary">Đã đóng</span>
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a asp-page="Details" asp-route-id="@e.Id" class="btn btn-sm btn-outline-primary">Chi tiết</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
